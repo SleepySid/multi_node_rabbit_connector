@@ -1,7 +1,7 @@
 /**
  * @fileoverview RabbitMQ Multi-Node Connector - Enterprise-grade RabbitMQ client
- * @module @your-scope/rabbitmq-connector
- * @author SID
+ * @module @slzsid/rabbitmq-multinode-connector
+ * @author SleepySid
  * @version 1.0.0
  */
 

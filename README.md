@@ -1,6 +1,6 @@
 # RabbitMQ Multi-Node Connector
 
-[![npm version](https://badge.fury.io/js/%40your-scope%2Frabbitmq-connector.svg)](https://www.npmjs.com/package/@your-scope/rabbitmq-connector)
+[![npm version](https://badge.fury.io/js/%40slzsid%2Frabbitmq-multinode-connector.svg)](https://www.npmjs.com/package/@slzsid/rabbitmq-multinode-connector)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Node](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -38,13 +38,13 @@ A robust, production-ready RabbitMQ client for Node.js and TypeScript with advan
 
 ```bash
 # Using npm
-npm install @your-scope/rabbitmq-connector
+npm install @slzsid/rabbitmq-multinode-connector
 
 # Using yarn
-yarn add @your-scope/rabbitmq-connector
+yarn add @slzsid/rabbitmq-multinode-connector
 
 # Using pnpm
-pnpm add @your-scope/rabbitmq-connector
+pnpm add @slzsid/rabbitmq-multinode-connector
 ```
 
 **Requirements:**
@@ -63,7 +63,7 @@ import {
   initializeSharedClient,
   getSharedClient,
   closeSharedClient,
-} from '@your-scope/rabbitmq-connector';
+} from '@slzsid/rabbitmq-multinode-connector';
 
 // 1. Initialize ONCE at application startup
 await initializeSharedClient({
@@ -93,7 +93,7 @@ process.on('SIGINT', async () => {
 Use this pattern when you need **multiple independent connections**.
 
 ```typescript
-import RabbitMQClient from '@your-scope/rabbitmq-connector';
+import RabbitMQClient from '@slzsid/rabbitmq-multinode-connector';
 
 // Basic configuration
 const client = new RabbitMQClient({
@@ -122,7 +122,7 @@ await client.gracefulShutdown();
 ### CommonJS
 
 ```javascript
-const RabbitMQClient = require('@your-scope/rabbitmq-connector').default;
+const RabbitMQClient = require('@slzsid/rabbitmq-multinode-connector').default;
 
 // Same usage as above
 ```
@@ -477,7 +477,7 @@ console.log(`Reconnections: ${metrics.reconnections}`);
 ### Basic Producer
 
 ```typescript
-import RabbitMQClient from '@your-scope/rabbitmq-connector';
+import RabbitMQClient from '@slzsid/rabbitmq-multinode-connector';
 
 class UserEventProducer {
   private client: RabbitMQClient;
