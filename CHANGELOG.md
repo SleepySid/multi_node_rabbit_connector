@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] - 2025-01-XX
+## [0.1.0] - 2025-11-26
 
 ### Added
-- Initial release of RabbitMQ Multi-Node Connector
+
+- Initial public release of RabbitMQ Multi-Node Connector
 - Connection pooling with configurable pool size
 - Circuit breaker pattern for fault tolerance
 - Multi-node cluster support with intelligent failover
@@ -26,14 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Queue and exchange management helpers
 - Dead letter exchange support
 - Message TTL and priority configuration
+- Shared client pattern for single connection across application
 
 ### Features
+
 - **Connection Management**: Auto-reconnection, heartbeat, timeout control
 - **Channel Pooling**: Up to configurable channels with automatic reuse
 - **Cluster Support**: Round-robin and random failover strategies
 - **Observability**: Metrics emission, event listeners, structured logs
 - **Reliability**: Circuit breaker, exponential backoff, health checks
 
-[Unreleased]: https://github.com/yourusername/rabbitmq-connector/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yourusername/rabbitmq-connector/releases/tag/v1.0.0
-
+[Unreleased]: https://github.com/SleepySid/multi_node_rabbit_connector/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/SleepySid/multi_node_rabbit_connector/releases/tag/v0.1.0

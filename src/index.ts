@@ -2,7 +2,7 @@
  * @fileoverview RabbitMQ Multi-Node Connector - Enterprise-grade RabbitMQ client
  * @module @slzsid/rabbitmq-multinode-connector
  * @author SleepySid
- * @version 1.0.0
+ * @version 0.1.0
  */
 
 // Export main client
