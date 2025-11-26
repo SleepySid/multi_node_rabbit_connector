@@ -1,0 +1,55 @@
+# Source files
+src/
+tsconfig.json
+*.ts
+!*.d.ts
+
+# Tests
+tests/
+test/
+**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+coverage/
+
+# Development files
+.git/
+.github/
+.vscode/
+.idea/
+*.log
+logs/
+node_modules/
+
+# Build tools
+.eslintrc*
+.prettierrc*
+.editorconfig
+jest.config.*
+tsconfig*.json
+
+# Documentation (include only necessary)
+README_GO.md
+examples/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go files
+*.go
+go.mod
+go.sum
+
+# Lock files (optional - some prefer to include)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Misc
+*.swp
+*.swo
+*~
+.env
+.env.*
+

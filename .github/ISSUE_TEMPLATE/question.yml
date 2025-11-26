@@ -1,0 +1,67 @@
+name: Question
+description: Ask a question about usage or functionality
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question? Please search existing issues and documentation first.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+      placeholder: Your question here
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide context about what you're trying to achieve
+      placeholder: What are you trying to accomplish?
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What Have You Tried
+      description: What have you already attempted?
+      placeholder: Describe what you've tried so far
+    validations:
+      required: false
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Relevant Code
+      description: If applicable, provide relevant code snippets
+      render: typescript
+      placeholder: Your code here
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Package Version
+      description: Which version are you using?
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues and discussions
+          required: true
+        - label: I have read the documentation
+          required: true
+

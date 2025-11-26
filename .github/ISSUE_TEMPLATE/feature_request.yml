@@ -1,0 +1,107 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a feature. Please provide as much detail as possible.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Describe the problem you're trying to solve
+      placeholder: What problem does this feature solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed solution
+      placeholder: How would you like this feature to work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: What alternatives have you considered?
+    validations:
+      required: false
+
+  - type: textarea
+    id: api
+    attributes:
+      label: API Design (if applicable)
+      description: If this is an API change, show what the API would look like
+      render: typescript
+      placeholder: |
+        // Proposed API usage
+        client.newMethod({
+          option: 'value'
+        });
+    validations:
+      required: false
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking Change
+      description: Would this be a breaking change?
+      options:
+        - "No"
+        - "Yes"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Low - Nice to have
+        - Medium - Would significantly improve my workflow
+        - High - Blocking my use case
+        - Critical - Cannot use the package without this
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe your specific use case for this feature
+      placeholder: How would you use this feature in your project?
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or examples
+      placeholder: Any additional information
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have checked the documentation to ensure this feature doesn't already exist
+          required: true
+        - label: I am willing to contribute a PR for this feature
+          required: false
+
