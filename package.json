@@ -69,7 +69,7 @@
     "test:ci": "NODE_OPTIONS='--experimental-vm-modules' jest --ci --coverage --maxWorkers=2",
     "prepare": "husky",
     "semantic-release": "semantic-release",
-    "version": "npm run build:prod && git add -A dist",
+    "preversion": "npm run build:prod",
     "postversion": "git push && git push --tags",
     "size": "npm pack --dry-run 2>&1 | grep -E '(size|kB)'"
   },
