@@ -133,10 +133,10 @@ async function main() {
     // ========================================================================
     await initializeSharedClient({
       urls: [
-        'amqp://ssh-smartship:SvSM&PGxYamart@20.244.52.24:5672',
+        'amqp://localhost:5672',
         // Add more cluster nodes for failover
-        // 'amqp://ssh-smartship:SvSM&PGxYamart@20.235.242.249:5672',
-        // 'amqp://ssh-smartship:SvSM&PGxYamart@4.213.225.168:5672',
+        // 'amqp://user:password@node2.rabbitmq.example.com:5672',
+        // 'amqp://user:password@node3.rabbitmq.example.com:5672',
       ],
       connectionName: 'shared-app-connection',
       heartbeat: 60,

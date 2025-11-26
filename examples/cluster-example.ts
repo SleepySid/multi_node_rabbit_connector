@@ -12,9 +12,9 @@ async function main() {
   const client = new RabbitMQClient({
     // Multiple RabbitMQ cluster nodes
     urls: [
-      'amqp://ssh-smartship:SvSM&PGxYamart@20.244.52.24:5672',
-      'amqp://ssh-smartship:SvSM&PGxYamart@20.235.242.249:5672',
-      'amqp://ssh-smartship:SvSM&PGxYamart@4.213.225.168:5672',
+      'amqp://user:password@node1.rabbitmq.example.com:5672',
+      'amqp://user:password@node2.rabbitmq.example.com:5672',
+      'amqp://user:password@node3.rabbitmq.example.com:5672',
     ],
     
     connectionName: 'cluster-example',
@@ -46,7 +46,7 @@ async function main() {
       retryConnectTimeout: 5000,
       nodeRecoveryInterval: 30000,
       shuffleNodes: true,
-      priorityNodes: ['amqp://ssh-smartship:SvSM&PGxYamart@20.244.52.24:5672'], // Try this node first
+      priorityNodes: ['amqp://user:password@node1.rabbitmq.example.com:5672'], // Try this node first
     },
     
     // Channel recovery options
