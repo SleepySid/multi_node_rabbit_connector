@@ -87,7 +87,7 @@ jobs:
           RABBITMQ_URL: amqp://localhost:5672
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: matrix.node-version == '20.x'
         with:
           file: ./coverage/lcov.info
