@@ -96,7 +96,7 @@
     "semantic-release": "^25.0.2",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.0.0"
