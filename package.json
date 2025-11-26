@@ -1,6 +1,6 @@
 {
   "name": "@slzsid/rabbitmq-multinode-connector",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Enterprise-grade RabbitMQ client with connection pooling, circuit breaker, cluster support, and comprehensive monitoring",
   "keywords": [
     "rabbitmq",
