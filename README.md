@@ -59,11 +59,7 @@ pnpm add @your-scope/rabbitmq-connector
 Use this pattern when you want **one connection shared across your entire application**.
 
 ```typescript
-import {
-  initializeSharedClient,
-  getSharedClient,
-  closeSharedClient,
-} from '@your-scope/rabbitmq-connector';
+import { initializeSharedClient, getSharedClient, closeSharedClient } from '@your-scope/rabbitmq-connector';
 
 // 1. Initialize ONCE at application startup
 await initializeSharedClient({
@@ -850,14 +846,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Author
 
-Your Name
+**SID**
 
 ## Support
 
 For issues and questions:
 
-- [Create an issue on GitHub](https://github.com/your-username/rabbitmq-multinode-connector/issues)
-- Check the [documentation](https://github.com/your-username/rabbitmq-multinode-connector#readme)
+- [Create an issue on GitHub](https://github.com/yourusername/rabbitmq-connector/issues)
+- Check the [documentation](https://github.com/yourusername/rabbitmq-connector#readme)
 - Review the [examples](./examples/)
 
 ## Changelog
