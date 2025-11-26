@@ -104,6 +104,8 @@ class NotificationService {
     await client.bindQueue('notifications', 'order-events', 'order.*');
     
     // Start consuming
+    // Note: Messages are automatically acknowledged after the callback completes successfully
+    // If the callback throws an error, the message will be nacked and requeued
     await client.consume('notifications', async (msg) => {
       if (msg) {
         const content = JSON.parse(msg.content.toString());
@@ -111,9 +113,6 @@ class NotificationService {
           routingKey: msg.fields.routingKey,
           content,
         });
-        
-        // Acknowledge the message
-        client.ack(msg);
       }
     });
     
