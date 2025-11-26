@@ -9,7 +9,7 @@ import RabbitMQClient from '../src/rabbit.js';
 
 async function main() {
   const client = new RabbitMQClient({
-    urls: ['amqp://ssh-smartship:SvSM&PGxYamart@20.244.52.24:5672'],
+    urls: ['amqp://localhost:5672'],
     connectionName: 'batch-publisher',
     
     // Batch configuration
