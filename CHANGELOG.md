@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-11-26
+
+### Changed
+
+- **BREAKING**: Removed SharedRabbitMQClient pattern - users now create and manage RabbitMQClient instances directly
+- Simplified API - just import `RabbitMQClient` and create instances as needed
+- Updated README with streamlined Quick Start guide
+
+### Removed
+
+- `initializeSharedClient()`, `getSharedClient()`, `closeSharedClient()`, `isSharedClientInitialized()` exports
+- `SharedClientConfig` type
+- `docs/SHARED_CLIENT.md` documentation
+- `examples/shared-client-usage.ts` example
+
 ## [0.1.0] - 2025-11-26
 
 ### Added
@@ -36,5 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Observability**: Metrics emission, event listeners, structured logs
 - **Reliability**: Circuit breaker, exponential backoff, health checks
 
-[Unreleased]: https://github.com/SleepySid/multi_node_rabbit_connector/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/SleepySid/multi_node_rabbit_connector/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/SleepySid/multi_node_rabbit_connector/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/SleepySid/multi_node_rabbit_connector/releases/tag/v0.1.0
