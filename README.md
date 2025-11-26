@@ -54,48 +54,12 @@ pnpm add @slzsid/rabbitmq-multinode-connector
 
 ## Quick Start
 
-### Option 1: Shared Client (Recommended for Single Connection)
-
-Use this pattern when you want **one connection shared across your entire application**.
-
-```typescript
-import {
-  initializeSharedClient,
-  getSharedClient,
-  closeSharedClient,
-} from '@slzsid/rabbitmq-multinode-connector';
-
-// 1. Initialize ONCE at application startup
-await initializeSharedClient({
-  urls: ['amqp://localhost:5672'],
-  connectionName: 'my-app',
-  poolConfig: {
-    maxChannels: 50, // Large pool for shared usage
-    acquireTimeout: 5000,
-  },
-});
-
-// 2. Use in ANY module/service
-const client = getSharedClient();
-await client.publish('my-exchange', 'routing.key', Buffer.from('Hello World'));
-
-// 3. Cleanup on shutdown
-process.on('SIGINT', async () => {
-  await closeSharedClient();
-  process.exit(0);
-});
-```
-
-📖 **[Read the Shared Client Guide](./docs/SHARED_CLIENT.md)** for complete examples.
-
-### Option 2: Multiple Instances
-
-Use this pattern when you need **multiple independent connections**.
+### Basic Usage
 
 ```typescript
 import RabbitMQClient from '@slzsid/rabbitmq-multinode-connector';
 
-// Basic configuration
+// Create a client instance
 const client = new RabbitMQClient({
   urls: ['amqp://localhost:5672'],
   connectionName: 'my-app-connection',
@@ -108,15 +72,20 @@ await client.connect();
 // Publish a message
 await client.publish('my-exchange', 'routing.key', Buffer.from('Hello World'));
 
-// Consume messages
+// Consume messages (auto-acknowledgment on success)
 const consumerTag = await client.consume('my-queue', async (msg) => {
   if (msg) {
     console.log('Received:', msg.content.toString());
+    // No need to manually ack - done automatically on success
+    // Throwing an error will auto-nack and requeue the message
   }
 });
 
 // Graceful shutdown
-await client.gracefulShutdown();
+process.on('SIGINT', async () => {
+  await client.gracefulShutdown();
+  process.exit(0);
+});
 ```
 
 ### CommonJS

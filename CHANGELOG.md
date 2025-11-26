@@ -27,7 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Queue and exchange management helpers
 - Dead letter exchange support
 - Message TTL and priority configuration
-- Shared client pattern for single connection across application
 
 ### Features
 

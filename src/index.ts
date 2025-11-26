@@ -9,15 +9,6 @@
 export { default as RabbitMQClient } from './rabbit.js';
 export { default } from './rabbit.js';
 
-// Export shared client singleton
-export {
-  initializeSharedClient,
-  getSharedClient,
-  closeSharedClient,
-  isSharedClientInitialized,
-  type SharedClientConfig,
-} from './shared-client.js';
-
 // Export logger (optional - users can use their own)
 export { default as logger } from './logger.js';
 
