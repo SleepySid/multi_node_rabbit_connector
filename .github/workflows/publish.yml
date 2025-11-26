@@ -21,6 +21,11 @@ concurrency:
   group: npm-publish
   cancel-in-progress: false
 
+# Required permissions for creating releases
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   # Validate before publishing
   validate:
