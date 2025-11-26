@@ -8,9 +8,9 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 10
     reviewers:
-      - "yourusername"
+      - "SleepySid"
     assignees:
-      - "yourusername"
+      - "SleepySid"
     labels:
       - "dependencies"
       - "automated"
@@ -30,6 +30,11 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # Security updates should be prioritized
+    ignore:
+      # Don't auto-update major versions
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -37,9 +42,10 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+    reviewers:
+      - "SleepySid"
     labels:
       - "dependencies"
       - "github-actions"
     commit-message:
       prefix: "ci"
-

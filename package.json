@@ -51,12 +51,15 @@
   },
   "scripts": {
     "build": "npm run clean && npm run build:esm && npm run build:cjs",
+    "build:prod": "npm run clean && npm run build:esm:prod && npm run build:cjs && npm run minify",
     "build:esm": "tsc",
+    "build:esm:prod": "tsc -p tsconfig.prod.json",
     "build:cjs": "tsc -p tsconfig.cjs.json && npm run build:cjs:fixup",
     "build:cjs:fixup": "cd dist/cjs && for f in *.js; do sed -i 's/\\.js\"/\\.cjs\"/g' \"$f\" && mv \"$f\" \"${f%.js}.cjs\"; done",
     "build:watch": "tsc --watch",
+    "minify": "node scripts/minify.js",
     "clean": "rm -rf dist build coverage .tsbuildinfo",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run build:prod",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -66,8 +69,9 @@
     "test:ci": "NODE_OPTIONS='--experimental-vm-modules' jest --ci --coverage --maxWorkers=2",
     "prepare": "husky",
     "semantic-release": "semantic-release",
-    "version": "npm run build && git add -A dist",
-    "postversion": "git push && git push --tags"
+    "version": "npm run build:prod && git add -A dist",
+    "postversion": "git push && git push --tags",
+    "size": "npm pack --dry-run 2>&1 | grep -E '(size|kB)'"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -83,6 +87,8 @@
     "@types/node": "^24.10.1",
     "@typescript-eslint/eslint-plugin": "^8.48.0",
     "@typescript-eslint/parser": "^8.32.1",
+    "audit-ci": "^7.1.0",
+    "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.5",
     "eslint-import-resolver-typescript": "^3.10.1",
@@ -94,6 +100,7 @@
     "lint-staged": "^15.5.2",
     "prettier": "^3.5.3",
     "semantic-release": "^25.0.2",
+    "terser": "^5.44.1",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

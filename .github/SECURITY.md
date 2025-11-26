@@ -4,10 +4,11 @@
 
 We actively support the following versions with security updates:
 
-| Version | Supported |
-| ------- | --------- |
-| 1.x.x   | Yes       |
-| < 1.0   | No        |
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.3.x   | :white_check_mark: |
+| 0.2.x   | :x:                |
+| < 0.2   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -17,9 +18,10 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 **DO NOT** open a public GitHub issue for security vulnerabilities.
 
-Instead, please report security vulnerabilities by emailing:
+Instead, please report security vulnerabilities via:
 
-- Email: security@yourdomain.com (replace with your security contact)
+- **GitHub Security Advisories**: [Report a vulnerability](https://github.com/SleepySid/multi_node_rabbit_connector/security/advisories/new)
+- **Email**: Create a private security advisory on GitHub
 
 ### What to Include
 
@@ -174,8 +176,8 @@ This library aims to support:
 
 For security-related questions or concerns:
 
-- Security issues: security@yourdomain.com
-- General questions: Use GitHub Discussions
+- **Security issues**: Use [GitHub Security Advisories](https://github.com/SleepySid/multi_node_rabbit_connector/security/advisories/new)
+- **General questions**: Use [GitHub Discussions](https://github.com/SleepySid/multi_node_rabbit_connector/discussions)
 
 ## Attribution
 
