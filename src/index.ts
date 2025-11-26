@@ -2,7 +2,7 @@
  * @fileoverview RabbitMQ Multi-Node Connector - Enterprise-grade RabbitMQ client
  * @module @slzsid/rabbitmq-multinode-connector
  * @author SleepySid
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 // Export main client
@@ -34,4 +34,10 @@ export {
 } from './errors.js';
 
 // Export types and interfaces (re-export from rabbit.ts)
-export type { QueueOptions, ExchangeOptions } from './rabbit.js';
+export type {
+  QueueOptions,
+  ExchangeOptions,
+  MessageActions,
+  ConsumeOptions,
+  ConsumeCallback,
+} from './rabbit.js';

@@ -54,11 +54,22 @@ describe('RabbitMQClient', () => {
     mockChannel.prefetch = jest.fn().mockResolvedValue(undefined);
     mockChannel.ack = jest.fn();
     mockChannel.nack = jest.fn();
+    mockChannel.reject = jest.fn();
     mockChannel.close = jest.fn().mockResolvedValue(undefined);
     mockChannel.checkQueue = jest
       .fn()
       .mockResolvedValue({ queue: 'healthCheckQueue', messageCount: 0, consumerCount: 0 });
     mockChannel.deleteQueue = jest.fn().mockResolvedValue({ messageCount: 0 });
+    mockChannel.purgeQueue = jest.fn().mockResolvedValue({ messageCount: 0 });
+    mockChannel.unbindQueue = jest.fn().mockResolvedValue(undefined);
+    mockChannel.deleteExchange = jest.fn().mockResolvedValue(undefined);
+    mockChannel.cancel = jest.fn().mockResolvedValue(undefined);
+    mockChannel.get = jest.fn().mockResolvedValue(false);
+    mockChannel.sendToQueue = jest.fn((_queue, _content, _opts, callback) => {
+      if (callback) {
+        callback(null);
+      }
+    });
     mockChannel.closed = false;
 
     // Setup mock connection
@@ -311,7 +322,8 @@ describe('RabbitMQClient', () => {
 
       await consumeCallback(mockMessage);
 
-      expect(messageHandler).toHaveBeenCalledWith(mockMessage);
+      // In auto-ack mode, callback is called with (msg, undefined)
+      expect(messageHandler).toHaveBeenCalledWith(mockMessage, undefined);
       expect(mockChannel.ack).toHaveBeenCalledWith(mockMessage);
     });
 
@@ -340,7 +352,8 @@ describe('RabbitMQClient', () => {
 
       await consumeCallback(mockMessage);
 
-      expect(messageHandler).toHaveBeenCalledWith(mockMessage);
+      // In auto-ack mode, callback is called with (msg, undefined)
+      expect(messageHandler).toHaveBeenCalledWith(mockMessage, undefined);
       expect(mockChannel.nack).toHaveBeenCalledWith(mockMessage, false, true);
     });
 
@@ -352,6 +365,310 @@ describe('RabbitMQClient', () => {
       await expect(disconnectedClient.consume('test-queue', async () => {})).rejects.toThrow(
         'Not connected to RabbitMQ',
       );
+    });
+
+    it('should support manual acknowledgment mode', async () => {
+      const queue = 'test-queue';
+      let consumeCallback: any;
+      let capturedActions: any;
+
+      mockChannel.consume = jest.fn((_q, callback, _opts) => {
+        consumeCallback = callback;
+        return Promise.resolve({ consumerTag: 'test-tag' });
+      });
+
+      const messageHandler = jest.fn(async (_msg, actions) => {
+        capturedActions = actions;
+        // Manually acknowledge
+        await actions.ack();
+      });
+
+      await client.consume(queue, messageHandler, { manualAck: true });
+
+      const mockMessage = {
+        content: Buffer.from('test message'),
+        fields: { deliveryTag: 1, exchange: 'test', routingKey: 'test' },
+        properties: {},
+      };
+
+      await consumeCallback(mockMessage);
+
+      // In manual mode, actions should be provided
+      expect(capturedActions).toBeDefined();
+      expect(capturedActions.ack).toBeDefined();
+      expect(capturedActions.nack).toBeDefined();
+      expect(capturedActions.reject).toBeDefined();
+      expect(mockChannel.ack).toHaveBeenCalledWith(mockMessage);
+    });
+
+    it('should allow nack with requeue in manual mode', async () => {
+      const queue = 'test-queue';
+      let consumeCallback: any;
+
+      mockChannel.consume = jest.fn((_q, callback, _opts) => {
+        consumeCallback = callback;
+        return Promise.resolve({ consumerTag: 'test-tag' });
+      });
+
+      const messageHandler = jest.fn(async (_msg, actions) => {
+        await actions.nack(true); // Requeue
+      });
+
+      await client.consume(queue, messageHandler, { manualAck: true });
+
+      const mockMessage = {
+        content: Buffer.from('test message'),
+        fields: { deliveryTag: 1, exchange: 'test', routingKey: 'test' },
+        properties: {},
+      };
+
+      await consumeCallback(mockMessage);
+
+      expect(mockChannel.nack).toHaveBeenCalledWith(mockMessage, false, true);
+    });
+
+    it('should allow reject without requeue in manual mode', async () => {
+      const queue = 'test-queue';
+      let consumeCallback: any;
+
+      mockChannel.consume = jest.fn((_q, callback, _opts) => {
+        consumeCallback = callback;
+        return Promise.resolve({ consumerTag: 'test-tag' });
+      });
+
+      const messageHandler = jest.fn(async (_msg, actions) => {
+        await actions.reject(false); // Send to DLQ
+      });
+
+      await client.consume(queue, messageHandler, { manualAck: true });
+
+      const mockMessage = {
+        content: Buffer.from('test message'),
+        fields: { deliveryTag: 1, exchange: 'test', routingKey: 'test' },
+        properties: {},
+      };
+
+      await consumeCallback(mockMessage);
+
+      expect(mockChannel.reject).toHaveBeenCalledWith(mockMessage, false);
+    });
+  });
+
+  describe('sendToQueue()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should send message directly to queue', async () => {
+      const queue = 'test-queue';
+      const content = Buffer.from('test message');
+      const options = { persistent: true };
+
+      await client.sendToQueue(queue, content, options);
+
+      expect(mockChannel.sendToQueue).toHaveBeenCalledWith(
+        queue,
+        content,
+        options,
+        expect.any(Function),
+      );
+    });
+
+    it('should throw error when not connected', async () => {
+      const disconnectedClient = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+
+      await expect(
+        disconnectedClient.sendToQueue('test-queue', Buffer.from('test')),
+      ).rejects.toThrow('Not connected to RabbitMQ');
+    });
+  });
+
+  describe('get()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should get single message from queue', async () => {
+      const queue = 'test-queue';
+      const mockMessage = {
+        content: Buffer.from('test message'),
+        fields: { deliveryTag: 1, exchange: 'test', routingKey: 'test' },
+        properties: {},
+      };
+
+      mockChannel.get = jest.fn().mockResolvedValue(mockMessage);
+
+      const result = await client.get(queue);
+
+      expect(mockChannel.get).toHaveBeenCalledWith(queue, {});
+      expect(result).toEqual(mockMessage);
+    });
+
+    it('should return false when queue is empty', async () => {
+      const queue = 'test-queue';
+      mockChannel.get = jest.fn().mockResolvedValue(false);
+
+      const result = await client.get(queue);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('ack/nack/reject()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should acknowledge a message', () => {
+      const mockMessage = {
+        content: Buffer.from('test'),
+        fields: { deliveryTag: 1, exchange: 'test', routingKey: 'test' },
+        properties: {},
+      } as any;
+
+      client.ack(mockMessage);
+      expect(mockChannel.ack).toHaveBeenCalledWith(mockMessage, false);
+    });
+
+    it('should nack a message with requeue', () => {
+      const mockMessage = {
+        content: Buffer.from('test'),
+        fields: { deliveryTag: 1, exchange: 'test', routingKey: 'test' },
+        properties: {},
+      } as any;
+
+      client.nack(mockMessage, false, true);
+      expect(mockChannel.nack).toHaveBeenCalledWith(mockMessage, false, true);
+    });
+
+    it('should reject a message', () => {
+      const mockMessage = {
+        content: Buffer.from('test'),
+        fields: { deliveryTag: 1, exchange: 'test', routingKey: 'test' },
+        properties: {},
+      } as any;
+
+      client.reject(mockMessage, false);
+      expect(mockChannel.reject).toHaveBeenCalledWith(mockMessage, false);
+    });
+  });
+
+  describe('cancel()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should cancel a consumer', async () => {
+      const consumerTag = 'test-consumer-tag';
+
+      await client.cancel(consumerTag);
+
+      expect(mockChannel.cancel).toHaveBeenCalledWith(consumerTag);
+    });
+  });
+
+  describe('prefetch()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should set prefetch count', async () => {
+      await client.prefetch(10);
+
+      expect(mockChannel.prefetch).toHaveBeenCalledWith(10, false);
+    });
+
+    it('should set global prefetch', async () => {
+      await client.prefetch(100, true);
+
+      expect(mockChannel.prefetch).toHaveBeenCalledWith(100, true);
+    });
+  });
+
+  describe('deleteQueue()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should delete a queue', async () => {
+      mockChannel.deleteQueue = jest.fn().mockResolvedValue({ messageCount: 5 });
+
+      const result = await client.deleteQueue('test-queue');
+
+      expect(mockChannel.deleteQueue).toHaveBeenCalledWith('test-queue', {});
+      expect(result.messageCount).toBe(5);
+    });
+  });
+
+  describe('purgeQueue()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should purge a queue', async () => {
+      mockChannel.purgeQueue = jest.fn().mockResolvedValue({ messageCount: 10 });
+
+      const result = await client.purgeQueue('test-queue');
+
+      expect(mockChannel.purgeQueue).toHaveBeenCalledWith('test-queue');
+      expect(result.messageCount).toBe(10);
+    });
+  });
+
+  describe('unbindQueue()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should unbind queue from exchange', async () => {
+      await client.unbindQueue('test-queue', 'test-exchange', 'test.key');
+
+      expect(mockChannel.unbindQueue).toHaveBeenCalledWith(
+        'test-queue',
+        'test-exchange',
+        'test.key',
+      );
+    });
+  });
+
+  describe('deleteExchange()', () => {
+    beforeEach(async () => {
+      client = new RabbitMQClient({
+        urls: ['amqp://localhost:5672'],
+      });
+      await client.connect();
+    });
+
+    it('should delete an exchange', async () => {
+      await client.deleteExchange('test-exchange');
+
+      expect(mockChannel.deleteExchange).toHaveBeenCalledWith('test-exchange', {});
     });
   });
 

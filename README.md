@@ -363,22 +363,104 @@ await client.publishBatch(messages);
 
 #### `consume(queue, onMessage, options): Promise<string>`
 
-Consumes messages from a queue with automatic acknowledgment.
+Consumes messages from a queue. Supports both auto and manual acknowledgment modes.
 
 ```typescript
+// Auto-acknowledgment mode (default)
 const consumerTag = await client.consume(
   'user-processing-queue',
   async (msg) => {
     if (msg) {
       const data = JSON.parse(msg.content.toString());
       await processUser(data);
+      // Message auto-acked on success, auto-nacked on error
     }
   },
-  {
-    noAck: false,
-    timeout: 30000, // Message processing timeout
-  },
+  { timeout: 30000 },
 );
+
+// Manual acknowledgment mode
+await client.consume(
+  'payment-queue',
+  async (msg, actions) => {
+    if (msg && actions) {
+      try {
+        const payment = JSON.parse(msg.content.toString());
+        await processPayment(payment);
+        await actions.ack(); // Manually acknowledge
+      } catch (error) {
+        if (isRetryable(error)) {
+          await actions.nack(true); // Requeue for retry
+        } else {
+          await actions.reject(false); // Send to DLQ
+        }
+      }
+    }
+  },
+  { manualAck: true },
+);
+```
+
+#### `sendToQueue(queue, content, options): Promise<void>`
+
+Sends a message directly to a queue (bypassing exchanges).
+
+```typescript
+await client.sendToQueue('direct-queue', Buffer.from(JSON.stringify({ id: 1 })), {
+  persistent: true,
+  priority: 5,
+});
+```
+
+#### `get(queue, options): Promise<Message | false>`
+
+Pulls a single message from a queue (synchronous fetch).
+
+```typescript
+const msg = await client.get('my-queue');
+if (msg) {
+  console.log('Got message:', msg.content.toString());
+  client.ack(msg); // Manual ack required
+} else {
+  console.log('Queue is empty');
+}
+```
+
+#### `ack(msg, allUpTo?): void`
+
+Acknowledges a message (for use with `get()` or `manualAck` mode).
+
+```typescript
+client.ack(msg); // Ack single message
+client.ack(msg, true); // Ack all messages up to this one
+```
+
+#### `nack(msg, allUpTo?, requeue?): void`
+
+Negative acknowledges a message.
+
+```typescript
+client.nack(msg, false, true); // Requeue the message
+client.nack(msg, false, false); // Don't requeue (goes to DLQ if configured)
+```
+
+#### `reject(msg, requeue?): void`
+
+Rejects a message (typically sends to DLQ if configured).
+
+```typescript
+client.reject(msg, false); // Send to DLQ
+client.reject(msg, true); // Requeue
+```
+
+#### `cancel(consumerTag): Promise<void>`
+
+Cancels a consumer.
+
+```typescript
+const consumerTag = await client.consume('my-queue', handler);
+// Later...
+await client.cancel(consumerTag);
 ```
 
 ### Queue and Exchange Management
@@ -414,6 +496,55 @@ Binds a queue to an exchange with a routing pattern.
 
 ```typescript
 await client.bindQueue('user-notifications', 'user-events', 'user.*.created');
+```
+
+#### `unbindQueue(queue, exchange, pattern): Promise<void>`
+
+Unbinds a queue from an exchange.
+
+```typescript
+await client.unbindQueue('user-notifications', 'user-events', 'user.*.created');
+```
+
+#### `deleteQueue(queue, options?): Promise<{ messageCount: number }>`
+
+Deletes a queue.
+
+```typescript
+const result = await client.deleteQueue('temp-queue');
+console.log(`Deleted queue with ${result.messageCount} messages`);
+
+// Delete only if empty and unused
+await client.deleteQueue('my-queue', { ifEmpty: true, ifUnused: true });
+```
+
+#### `purgeQueue(queue): Promise<{ messageCount: number }>`
+
+Removes all messages from a queue.
+
+```typescript
+const result = await client.purgeQueue('my-queue');
+console.log(`Purged ${result.messageCount} messages`);
+```
+
+#### `deleteExchange(exchange, options?): Promise<void>`
+
+Deletes an exchange.
+
+```typescript
+await client.deleteExchange('temp-exchange');
+
+// Delete only if unused
+await client.deleteExchange('my-exchange', { ifUnused: true });
+```
+
+#### `prefetch(count, global?): Promise<void>`
+
+Sets the prefetch count (QoS) for the channel.
+
+```typescript
+await client.prefetch(10); // Per consumer
+await client.prefetch(100, true); // Global for channel
 ```
 
 ### Health and Monitoring

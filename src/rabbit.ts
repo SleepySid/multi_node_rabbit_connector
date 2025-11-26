@@ -274,6 +274,36 @@ export interface ExchangeOptions extends Options.AssertExchange {
 }
 
 /**
+ * Message acknowledgment actions for manual ack mode
+ * @interface MessageActions
+ */
+export interface MessageActions {
+  /** Acknowledge the message (mark as successfully processed) */
+  ack: () => Promise<void>;
+  /** Negative acknowledge (reject with optional requeue) */
+  nack: (requeue?: boolean) => Promise<void>;
+  /** Reject the message (typically sends to DLQ if configured) */
+  reject: (requeue?: boolean) => Promise<void>;
+}
+
+/**
+ * Consume options extending amqplib Options.Consume
+ * @interface ConsumeOptions
+ */
+export interface ConsumeOptions extends Options.Consume {
+  /** Processing timeout in milliseconds (default: 30000) */
+  timeout?: number;
+  /** Enable manual acknowledgment mode (default: false) */
+  manualAck?: boolean;
+}
+
+/**
+ * Callback function for message consumption
+ * @callback ConsumeCallback
+ */
+export type ConsumeCallback = (msg: Message | null, actions?: MessageActions) => Promise<void>;
+
+/**
  * Message batch for bulk publishing
  * @interface MessageBatch
  */
@@ -2027,33 +2057,119 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
   }
 
   /**
+   * Message acknowledgment helpers for manual ack mode
+   * @interface MessageActions
+   */
+  private createMessageActions(msg: Message, queue: string): MessageActions {
+    let acknowledged = false;
+
+    return {
+      ack: async () => {
+        if (acknowledged) {
+          logger.warn('Message already acknowledged', 'RabbitMQClient.consume', {
+            queue,
+            deliveryTag: msg.fields.deliveryTag,
+          });
+          return;
+        }
+        acknowledged = true;
+        try {
+          this.defaultChannel?.ack(msg);
+          logger.trace('Message manually acknowledged', 'RabbitMQClient.consume', {
+            queue,
+            deliveryTag: msg.fields.deliveryTag,
+          });
+        } catch (err) {
+          throw new Error(err instanceof Error ? err.message : 'Ack failed');
+        }
+      },
+      nack: async (requeue = true) => {
+        if (acknowledged) {
+          logger.warn('Message already acknowledged', 'RabbitMQClient.consume', {
+            queue,
+            deliveryTag: msg.fields.deliveryTag,
+          });
+          return;
+        }
+        acknowledged = true;
+        try {
+          this.defaultChannel?.nack(msg, false, requeue);
+          logger.trace('Message manually nacked', 'RabbitMQClient.consume', {
+            queue,
+            deliveryTag: msg.fields.deliveryTag,
+            requeue,
+          });
+        } catch (err) {
+          throw new Error(err instanceof Error ? err.message : 'Nack failed');
+        }
+      },
+      reject: async (requeue = false) => {
+        if (acknowledged) {
+          logger.warn('Message already acknowledged', 'RabbitMQClient.consume', {
+            queue,
+            deliveryTag: msg.fields.deliveryTag,
+          });
+          return;
+        }
+        acknowledged = true;
+        try {
+          this.defaultChannel?.reject(msg, requeue);
+          logger.trace('Message manually rejected', 'RabbitMQClient.consume', {
+            queue,
+            deliveryTag: msg.fields.deliveryTag,
+            requeue,
+          });
+        } catch (err) {
+          throw new Error(err instanceof Error ? err.message : 'Reject failed');
+        }
+      },
+    };
+  }
+
+  /**
    * Consumes messages from a queue with improved async handling
    *
    * @public
    * @param {string} queue - Queue name to consume from
-   * @param {(msg: Message | null) => Promise<void>} onMessage - Message handler function
-   * @param {Options.Consume & { timeout?: number }} options - Consume options with optional timeout
+   * @param {ConsumeCallback} onMessage - Message handler function
+   * @param {ConsumeOptions} options - Consume options with optional timeout and manualAck
    * @returns {Promise<string>} Promise resolving to consumer tag
    * @throws {Error} If channel is not available or consumption fails
    *
    * @example
    * ```typescript
+   * // Auto-acknowledgment mode (default)
    * const consumerTag = await client.consume('my-queue', async (msg) => {
    *   if (msg) {
    *     console.log('Received:', msg.content.toString());
-   *     // Message will be automatically acknowledged
+   *     // Message will be automatically acknowledged on success
    *   }
    * }, { noAck: false, timeout: 30000 });
+   *
+   * // Manual acknowledgment mode
+   * await client.consume('my-queue', async (msg, actions) => {
+   *   if (msg && actions) {
+   *     try {
+   *       await processMessage(msg);
+   *       await actions.ack(); // Manually acknowledge
+   *     } catch (error) {
+   *       await actions.nack(true); // Requeue on failure
+   *       // OR: await actions.reject(false); // Send to DLQ
+   *     }
+   *   }
+   * }, { manualAck: true });
    * ```
    */
   public async consume(
     queue: string,
-    onMessage: (msg: Message | null) => Promise<void>,
-    options: Options.Consume & { timeout?: number } = {},
+    onMessage: ConsumeCallback,
+    options: ConsumeOptions = {},
   ): Promise<string> {
+    const { manualAck = false, timeout = 30000, ...consumeOptions } = options;
+
     logger.debug('Setting up message consumer', 'RabbitMQClient.consume', {
       queue,
-      options: { ...options, timeout: options.timeout || 30000 },
+      options: { ...options, timeout, manualAck },
     });
 
     this.ensureChannel();
@@ -2075,34 +2191,35 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
 
             // Create a timeout promise
             const timeoutPromise = new Promise<void>((_, reject) => {
-              setTimeout(
-                () => reject(new Error('Message processing timeout')),
-                options.timeout || 30000,
-              );
+              setTimeout(() => reject(new Error('Message processing timeout')), timeout);
             });
 
-            // Race between message processing and timeout
-            await Promise.race([onMessage(msg), timeoutPromise]);
+            if (manualAck && msg) {
+              // Manual acknowledgment mode - pass actions to callback
+              const actions = this.createMessageActions(msg, queue);
+              await Promise.race([onMessage(msg, actions), timeoutPromise]);
+            } else {
+              // Auto-acknowledgment mode
+              await Promise.race([onMessage(msg, undefined), timeoutPromise]);
 
-            await this.updateMetrics('received');
-
-            const processingTime = Date.now() - startTime;
-            this.metrics.avgProcessingTime = (this.metrics.avgProcessingTime + processingTime) / 2;
-
-            if (msg && !options.noAck) {
-              await new Promise<void>((resolve, reject) => {
+              // Auto-ack on success
+              if (msg && !consumeOptions.noAck) {
                 try {
                   this.defaultChannel?.ack(msg);
                   logger.trace('Message acknowledged', 'RabbitMQClient.consume', {
                     queue,
                     deliveryTag: msg.fields.deliveryTag,
                   });
-                  resolve();
                 } catch (err) {
-                  reject(new Error(err instanceof Error ? err.message : 'Ack failed'));
+                  throw new Error(err instanceof Error ? err.message : 'Ack failed');
                 }
-              });
+              }
             }
+
+            await this.updateMetrics('received');
+
+            const processingTime = Date.now() - startTime;
+            this.metrics.avgProcessingTime = (this.metrics.avgProcessingTime + processingTime) / 2;
           } catch (error) {
             logger.error('Message processing failed', 'RabbitMQClient.consume', {
               error: this.formatError(error),
@@ -2110,30 +2227,30 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
               deliveryTag: msg?.fields.deliveryTag,
             });
 
-            if (msg && !options.noAck) {
-              await new Promise<void>((resolve, reject) => {
-                try {
-                  this.defaultChannel?.nack(msg, false, true);
-                  logger.debug('Message nacked and requeued', 'RabbitMQClient.consume', {
-                    queue,
-                    deliveryTag: msg.fields.deliveryTag,
-                  });
-                  resolve();
-                } catch (err) {
-                  reject(new Error(err instanceof Error ? err.message : 'Nack failed'));
-                }
-              });
+            // Auto-nack on error (only in auto-ack mode)
+            if (!manualAck && msg && !consumeOptions.noAck) {
+              try {
+                this.defaultChannel?.nack(msg, false, true);
+                logger.debug('Message nacked and requeued', 'RabbitMQClient.consume', {
+                  queue,
+                  deliveryTag: msg.fields.deliveryTag,
+                });
+              } catch (err) {
+                logger.error('Failed to nack message', 'RabbitMQClient.consume', {
+                  error: this.formatError(err),
+                });
+              }
             }
             await this.handleError(error);
           }
         },
-        options,
+        consumeOptions,
       );
 
       logger.info('Consumer setup completed', 'RabbitMQClient.consume', {
         queue,
         consumerTag,
-        options,
+        options: { ...options, manualAck },
       });
 
       return consumerTag;
@@ -2443,6 +2560,509 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
         queue,
         exchange,
         pattern,
+      });
+      await this.handleError(error);
+      throw this.ensureError(error);
+    }
+  }
+
+  /**
+   * Unbinds a queue from an exchange
+   *
+   * @public
+   * @param {string} queue - Queue name
+   * @param {string} exchange - Exchange name
+   * @param {string} pattern - Routing pattern to unbind
+   * @returns {Promise<void>}
+   * @throws {Error} If channel is not available or unbinding fails
+   *
+   * @example
+   * ```typescript
+   * await client.unbindQueue('my-queue', 'my-exchange', 'routing.key.*');
+   * ```
+   */
+  public async unbindQueue(queue: string, exchange: string, pattern: string): Promise<void> {
+    logger.debug('Unbinding queue from exchange', 'RabbitMQClient.unbindQueue', {
+      queue,
+      exchange,
+      pattern,
+    });
+
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      const error = new Error('Channel not available');
+      logger.error('Queue unbinding failed - no channel', 'RabbitMQClient.unbindQueue', {
+        error: error.message,
+        queue,
+        exchange,
+      });
+      throw error;
+    }
+
+    try {
+      await this.defaultChannel.unbindQueue(queue, exchange, pattern);
+      logger.info('Queue unbound from exchange successfully', 'RabbitMQClient.unbindQueue', {
+        queue,
+        exchange,
+        pattern,
+      });
+    } catch (error) {
+      logger.error('Failed to unbind queue from exchange', 'RabbitMQClient.unbindQueue', {
+        error: this.formatError(error),
+        queue,
+        exchange,
+        pattern,
+      });
+      await this.handleError(error);
+      throw this.ensureError(error);
+    }
+  }
+
+  /**
+   * Sends a message directly to a queue (without going through an exchange)
+   *
+   * @public
+   * @param {string} queue - Queue name to send to
+   * @param {Buffer} content - Message content
+   * @param {Options.Publish} options - Publish options
+   * @returns {Promise<void>}
+   * @throws {Error} If channel is not available or send fails
+   *
+   * @example
+   * ```typescript
+   * await client.sendToQueue('my-queue', Buffer.from(JSON.stringify({ id: 1 })), {
+   *   persistent: true,
+   *   priority: 5,
+   * });
+   * ```
+   */
+  public async sendToQueue(
+    queue: string,
+    content: Buffer,
+    options: Options.Publish = {},
+  ): Promise<void> {
+    logger.debug('Sending message to queue', 'RabbitMQClient.sendToQueue', {
+      queue,
+      contentLength: content.length,
+      options,
+    });
+
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      const error = new Error('Channel not available');
+      logger.error('Send to queue failed - no channel', 'RabbitMQClient.sendToQueue', {
+        error: error.message,
+        queue,
+      });
+      throw error;
+    }
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        this.defaultChannel?.sendToQueue(queue, content, options, (err) => {
+          if (err) {
+            logger.error('Send to queue failed', 'RabbitMQClient.sendToQueue', {
+              error: this.formatError(err),
+              queue,
+            });
+            reject(this.ensureError(err));
+          } else {
+            logger.trace('Message sent to queue successfully', 'RabbitMQClient.sendToQueue', {
+              queue,
+              contentLength: content.length,
+            });
+            resolve();
+          }
+        });
+      });
+
+      await this.updateMetrics('sent');
+    } catch (error) {
+      await this.handleError(error);
+      throw this.ensureError(error);
+    }
+  }
+
+  /**
+   * Gets a single message from a queue (pull/polling mode)
+   *
+   * @public
+   * @param {string} queue - Queue name to get message from
+   * @param {Options.Get} options - Get options (noAck defaults to false)
+   * @returns {Promise<Message | false>} Message or false if queue is empty
+   * @throws {Error} If channel is not available or get fails
+   *
+   * @example
+   * ```typescript
+   * const msg = await client.get('my-queue', { noAck: false });
+   * if (msg) {
+   *   console.log('Got message:', msg.content.toString());
+   *   await client.ack(msg); // Manual ack required
+   * } else {
+   *   console.log('Queue is empty');
+   * }
+   * ```
+   */
+  public async get(queue: string, options: Options.Get = {}): Promise<Message | false> {
+    logger.debug('Getting message from queue', 'RabbitMQClient.get', {
+      queue,
+      options,
+    });
+
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      const error = new Error('Channel not available');
+      logger.error('Get message failed - no channel', 'RabbitMQClient.get', {
+        error: error.message,
+        queue,
+      });
+      throw error;
+    }
+
+    try {
+      const msg = await this.defaultChannel.get(queue, options);
+
+      if (msg) {
+        logger.trace('Message retrieved from queue', 'RabbitMQClient.get', {
+          queue,
+          deliveryTag: msg.fields.deliveryTag,
+        });
+        await this.updateMetrics('received');
+      } else {
+        logger.trace('Queue is empty', 'RabbitMQClient.get', { queue });
+      }
+
+      return msg;
+    } catch (error) {
+      logger.error('Failed to get message from queue', 'RabbitMQClient.get', {
+        error: this.formatError(error),
+        queue,
+      });
+      await this.handleError(error);
+      throw this.ensureError(error);
+    }
+  }
+
+  /**
+   * Acknowledges a message
+   *
+   * @public
+   * @param {Message} msg - Message to acknowledge
+   * @param {boolean} allUpTo - Ack all messages up to this one (default: false)
+   * @returns {void}
+   *
+   * @example
+   * ```typescript
+   * const msg = await client.get('my-queue');
+   * if (msg) {
+   *   await processMessage(msg);
+   *   client.ack(msg);
+   * }
+   * ```
+   */
+  public ack(msg: Message, allUpTo = false): void {
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      throw new Error('Channel not available');
+    }
+
+    this.defaultChannel.ack(msg, allUpTo);
+    logger.trace('Message acknowledged', 'RabbitMQClient.ack', {
+      deliveryTag: msg.fields.deliveryTag,
+      allUpTo,
+    });
+  }
+
+  /**
+   * Negative acknowledges a message
+   *
+   * @public
+   * @param {Message} msg - Message to nack
+   * @param {boolean} allUpTo - Nack all messages up to this one (default: false)
+   * @param {boolean} requeue - Requeue the message (default: true)
+   * @returns {void}
+   *
+   * @example
+   * ```typescript
+   * const msg = await client.get('my-queue');
+   * if (msg) {
+   *   try {
+   *     await processMessage(msg);
+   *     client.ack(msg);
+   *   } catch (error) {
+   *     client.nack(msg, false, true); // Requeue on failure
+   *   }
+   * }
+   * ```
+   */
+  public nack(msg: Message, allUpTo = false, requeue = true): void {
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      throw new Error('Channel not available');
+    }
+
+    this.defaultChannel.nack(msg, allUpTo, requeue);
+    logger.trace('Message nacked', 'RabbitMQClient.nack', {
+      deliveryTag: msg.fields.deliveryTag,
+      allUpTo,
+      requeue,
+    });
+  }
+
+  /**
+   * Rejects a message (sends to DLQ if configured)
+   *
+   * @public
+   * @param {Message} msg - Message to reject
+   * @param {boolean} requeue - Requeue the message (default: false, sends to DLQ)
+   * @returns {void}
+   *
+   * @example
+   * ```typescript
+   * const msg = await client.get('my-queue');
+   * if (msg) {
+   *   if (isInvalidMessage(msg)) {
+   *     client.reject(msg, false); // Send to DLQ
+   *   } else {
+   *     await processMessage(msg);
+   *     client.ack(msg);
+   *   }
+   * }
+   * ```
+   */
+  public reject(msg: Message, requeue = false): void {
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      throw new Error('Channel not available');
+    }
+
+    this.defaultChannel.reject(msg, requeue);
+    logger.trace('Message rejected', 'RabbitMQClient.reject', {
+      deliveryTag: msg.fields.deliveryTag,
+      requeue,
+    });
+  }
+
+  /**
+   * Cancels a consumer by its consumer tag
+   *
+   * @public
+   * @param {string} consumerTag - Consumer tag returned from consume()
+   * @returns {Promise<void>}
+   * @throws {Error} If channel is not available or cancel fails
+   *
+   * @example
+   * ```typescript
+   * const consumerTag = await client.consume('my-queue', handler);
+   * // Later...
+   * await client.cancel(consumerTag);
+   * ```
+   */
+  public async cancel(consumerTag: string): Promise<void> {
+    logger.debug('Cancelling consumer', 'RabbitMQClient.cancel', { consumerTag });
+
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      const error = new Error('Channel not available');
+      logger.error('Cancel consumer failed - no channel', 'RabbitMQClient.cancel', {
+        error: error.message,
+        consumerTag,
+      });
+      throw error;
+    }
+
+    try {
+      await this.defaultChannel.cancel(consumerTag);
+      logger.info('Consumer cancelled successfully', 'RabbitMQClient.cancel', { consumerTag });
+    } catch (error) {
+      logger.error('Failed to cancel consumer', 'RabbitMQClient.cancel', {
+        error: this.formatError(error),
+        consumerTag,
+      });
+      await this.handleError(error);
+      throw this.ensureError(error);
+    }
+  }
+
+  /**
+   * Sets the prefetch count for the channel
+   *
+   * @public
+   * @param {number} count - Number of messages to prefetch
+   * @param {boolean} global - Apply globally to all consumers on channel (default: false)
+   * @returns {Promise<void>}
+   * @throws {Error} If channel is not available or prefetch fails
+   *
+   * @example
+   * ```typescript
+   * // Set prefetch to 10 messages per consumer
+   * await client.prefetch(10);
+   *
+   * // Set global prefetch for the channel
+   * await client.prefetch(100, true);
+   * ```
+   */
+  public async prefetch(count: number, global = false): Promise<void> {
+    logger.debug('Setting prefetch count', 'RabbitMQClient.prefetch', { count, global });
+
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      const error = new Error('Channel not available');
+      logger.error('Prefetch failed - no channel', 'RabbitMQClient.prefetch', {
+        error: error.message,
+      });
+      throw error;
+    }
+
+    try {
+      await this.defaultChannel.prefetch(count, global);
+      logger.info('Prefetch count set successfully', 'RabbitMQClient.prefetch', { count, global });
+    } catch (error) {
+      logger.error('Failed to set prefetch count', 'RabbitMQClient.prefetch', {
+        error: this.formatError(error),
+        count,
+        global,
+      });
+      await this.handleError(error);
+      throw this.ensureError(error);
+    }
+  }
+
+  /**
+   * Deletes a queue
+   *
+   * @public
+   * @param {string} queue - Queue name to delete
+   * @param {Options.DeleteQueue} options - Delete options
+   * @returns {Promise<amqplib.Replies.DeleteQueue>} Delete result with message count
+   * @throws {Error} If channel is not available or delete fails
+   *
+   * @example
+   * ```typescript
+   * const result = await client.deleteQueue('temp-queue');
+   * console.log(`Deleted queue with ${result.messageCount} messages`);
+   *
+   * // Delete only if empty and unused
+   * await client.deleteQueue('my-queue', { ifEmpty: true, ifUnused: true });
+   * ```
+   */
+  public async deleteQueue(
+    queue: string,
+    options: Options.DeleteQueue = {},
+  ): Promise<amqplib.Replies.DeleteQueue> {
+    logger.debug('Deleting queue', 'RabbitMQClient.deleteQueue', { queue, options });
+
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      const error = new Error('Channel not available');
+      logger.error('Delete queue failed - no channel', 'RabbitMQClient.deleteQueue', {
+        error: error.message,
+        queue,
+      });
+      throw error;
+    }
+
+    try {
+      const result = await this.defaultChannel.deleteQueue(queue, options);
+      logger.info('Queue deleted successfully', 'RabbitMQClient.deleteQueue', {
+        queue,
+        messageCount: result.messageCount,
+      });
+      return result;
+    } catch (error) {
+      logger.error('Failed to delete queue', 'RabbitMQClient.deleteQueue', {
+        error: this.formatError(error),
+        queue,
+      });
+      await this.handleError(error);
+      throw this.ensureError(error);
+    }
+  }
+
+  /**
+   * Purges all messages from a queue
+   *
+   * @public
+   * @param {string} queue - Queue name to purge
+   * @returns {Promise<amqplib.Replies.PurgeQueue>} Purge result with message count
+   * @throws {Error} If channel is not available or purge fails
+   *
+   * @example
+   * ```typescript
+   * const result = await client.purgeQueue('my-queue');
+   * console.log(`Purged ${result.messageCount} messages from queue`);
+   * ```
+   */
+  public async purgeQueue(queue: string): Promise<amqplib.Replies.PurgeQueue> {
+    logger.debug('Purging queue', 'RabbitMQClient.purgeQueue', { queue });
+
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      const error = new Error('Channel not available');
+      logger.error('Purge queue failed - no channel', 'RabbitMQClient.purgeQueue', {
+        error: error.message,
+        queue,
+      });
+      throw error;
+    }
+
+    try {
+      const result = await this.defaultChannel.purgeQueue(queue);
+      logger.info('Queue purged successfully', 'RabbitMQClient.purgeQueue', {
+        queue,
+        messageCount: result.messageCount,
+      });
+      return result;
+    } catch (error) {
+      logger.error('Failed to purge queue', 'RabbitMQClient.purgeQueue', {
+        error: this.formatError(error),
+        queue,
+      });
+      await this.handleError(error);
+      throw this.ensureError(error);
+    }
+  }
+
+  /**
+   * Deletes an exchange
+   *
+   * @public
+   * @param {string} exchange - Exchange name to delete
+   * @param {Options.DeleteExchange} options - Delete options
+   * @returns {Promise<void>}
+   * @throws {Error} If channel is not available or delete fails
+   *
+   * @example
+   * ```typescript
+   * await client.deleteExchange('temp-exchange');
+   *
+   * // Delete only if unused
+   * await client.deleteExchange('my-exchange', { ifUnused: true });
+   * ```
+   */
+  public async deleteExchange(
+    exchange: string,
+    options: Options.DeleteExchange = {},
+  ): Promise<void> {
+    logger.debug('Deleting exchange', 'RabbitMQClient.deleteExchange', { exchange, options });
+
+    this.ensureChannel();
+    if (!this.defaultChannel) {
+      const error = new Error('Channel not available');
+      logger.error('Delete exchange failed - no channel', 'RabbitMQClient.deleteExchange', {
+        error: error.message,
+        exchange,
+      });
+      throw error;
+    }
+
+    try {
+      await this.defaultChannel.deleteExchange(exchange, options);
+      logger.info('Exchange deleted successfully', 'RabbitMQClient.deleteExchange', { exchange });
+    } catch (error) {
+      logger.error('Failed to delete exchange', 'RabbitMQClient.deleteExchange', {
+        error: this.formatError(error),
+        exchange,
       });
       await this.handleError(error);
       throw this.ensureError(error);
