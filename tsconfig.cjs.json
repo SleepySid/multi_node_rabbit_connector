@@ -3,11 +3,11 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "outDir": "dist",
-    "declaration": true,
-    "declarationMap": true
+    "outDir": "dist/cjs",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "build", "**/*.test.ts", "**/*.spec.ts", "examples"]
+  "exclude": ["node_modules", "dist", "build", "**/*.test.ts", "**/*.spec.ts", "**/__tests__/**"]
 }
-

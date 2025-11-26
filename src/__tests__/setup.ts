@@ -2,6 +2,8 @@
  * @fileoverview Jest test setup file
  */
 
+import { jest, afterAll } from '@jest/globals';
+
 // Set test environment variables
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'error'; // Reduce noise in test output

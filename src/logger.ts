@@ -179,8 +179,8 @@ const logger = {
   },
 };
 
-// Graceful shutdown handler
-process.on('SIGTERM', () => {
+// Graceful shutdown handler - use once() to avoid duplicate handlers
+process.once('SIGTERM', () => {
   logger.info('SIGTERM received. Shutting down gracefully.', 'GracefulShutdown');
   setTimeout(() => process.exit(0), 1000);
 });

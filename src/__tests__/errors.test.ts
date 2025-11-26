@@ -2,6 +2,7 @@
  * @fileoverview Tests for custom error classes
  */
 
+import { describe, it, expect } from '@jest/globals';
 import {
   RabbitMQError,
   ConnectionError,

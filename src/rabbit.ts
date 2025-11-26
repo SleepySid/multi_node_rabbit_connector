@@ -402,6 +402,9 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
   /** Cluster node status tracking */
   private activeNodes: Map<string, NodeStatus> = new Map();
 
+  /** Interval timers for cleanup on close */
+  private readonly intervalTimers: Set<ReturnType<typeof setInterval>> = new Set();
+
   /**
    * Initializes a new RabbitMQ client with the specified options
    *
@@ -472,10 +475,12 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
   private initializeMetricsCollection(): void {
     logger.debug('Starting metrics collection', 'RabbitMQClient.initializeMetricsCollection');
 
-    setInterval(() => {
+    const intervalId = setInterval(() => {
       logger.trace('Emitting metrics', 'RabbitMQClient.initializeMetricsCollection', this.metrics);
       this.emit('metrics', { ...this.metrics });
     }, CONSTANTS.DEFAULT_METRICS_INTERVAL);
+    intervalId.unref(); // Don't block process exit
+    this.intervalTimers.add(intervalId);
   }
 
   /**
@@ -916,7 +921,7 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
     });
 
     // Periodic connection health check
-    setInterval(async () => {
+    const healthCheckIntervalId = setInterval(async () => {
       try {
         const isHealthy = await this.healthCheck();
         if (!isHealthy && !this.reconnecting) {
@@ -932,10 +937,12 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
         });
       }
     }, 30000); // Every 30 seconds
+    healthCheckIntervalId.unref();
+    this.intervalTimers.add(healthCheckIntervalId);
 
     // Monitor cluster nodes health
     if (this.options.clusterOptions?.nodeRecoveryInterval) {
-      setInterval(async () => {
+      const clusterHealthIntervalId = setInterval(async () => {
         try {
           await this.checkClusterNodesHealth();
         } catch (error) {
@@ -944,6 +951,8 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
           });
         }
       }, this.options.clusterOptions.nodeRecoveryInterval);
+      clusterHealthIntervalId.unref();
+      this.intervalTimers.add(clusterHealthIntervalId);
     }
 
     logger.debug(
@@ -1024,7 +1033,7 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
     await this.initializeChannelPool();
 
     // Add channel recovery logic
-    setInterval(async () => {
+    const channelRecoveryIntervalId = setInterval(async () => {
       try {
         await this.checkAndRecoverChannels();
       } catch (error) {
@@ -1033,6 +1042,8 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
         });
       }
     }, 5000); // Check every 5 seconds
+    channelRecoveryIntervalId.unref();
+    this.intervalTimers.add(channelRecoveryIntervalId);
 
     logger.info('Channels setup completed', 'RabbitMQClient.setupChannels', {
       defaultChannelCreated: !!this.defaultChannel,
@@ -1579,6 +1590,13 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
 
       this.reconnecting = false;
 
+      // Clear all interval timers
+      for (const intervalId of this.intervalTimers) {
+        clearInterval(intervalId);
+      }
+      this.intervalTimers.clear();
+      logger.debug('Cleared all interval timers', 'RabbitMQClient.close');
+
       if (this.messageBatch.timer) {
         clearTimeout(this.messageBatch.timer);
         this.messageBatch.timer = null;
@@ -1896,6 +1914,12 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
 
       // Stop accepting new connections/channels immediately
       this.reconnecting = false;
+
+      // Clear all interval timers
+      for (const intervalId of this.intervalTimers) {
+        clearInterval(intervalId);
+      }
+      this.intervalTimers.clear();
 
       // Clear any pending timers
       if (this.messageBatch.timer) {
@@ -2649,7 +2673,7 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
       hasClusterOptions: !!this.options.clusterOptions,
     });
 
-    setInterval(async () => {
+    const nodeHealthIntervalId = setInterval(async () => {
       try {
         await this.checkClusterNodesHealth();
       } catch (error) {
@@ -2658,6 +2682,8 @@ class RabbitMQClient extends EventEmitter implements RabbitMQClientEvents {
         });
       }
     }, interval);
+    nodeHealthIntervalId.unref();
+    this.intervalTimers.add(nodeHealthIntervalId);
   }
 
   /**
