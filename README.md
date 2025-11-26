@@ -850,14 +850,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Author
 
-Your Name
+SleepySid
 
 ## Support
 
 For issues and questions:
 
-- [Create an issue on GitHub](https://github.com/your-username/rabbitmq-multinode-connector/issues)
-- Check the [documentation](https://github.com/your-username/rabbitmq-multinode-connector#readme)
+- [Create an issue on GitHub](https://github.com/SleepySid/multi_node_rabbit_connector/issues)
+- Check the [documentation](https://github.com/SleepySid/multi_node_rabbit_connector#readme)
 - Review the [examples](./examples/)
 
 ## Changelog

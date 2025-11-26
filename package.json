@@ -1,5 +1,5 @@
 {
-  "name": "@your-scope/rabbitmq-multinode-connector",
+  "name": "@slzsid/rabbitmq-multinode-connector",
   "version": "1.0.0",
   "description": "Enterprise-grade RabbitMQ client with connection pooling, circuit breaker, cluster support, and comprehensive monitoring",
   "keywords": [
@@ -18,15 +18,15 @@
     "multinode"
   ],
   "license": "MIT",
-  "author": "Your Name <your.email@example.com>",
+  "author": "SleepySid",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/rabbitmq-multinode-connector.git"
+    "url": "https://github.com/SleepySid/multi_node_rabbit_connector.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/rabbitmq-multinode-connector/issues"
+    "url": "https://github.com/SleepySid/multi_node_rabbit_connector/issues"
   },
-  "homepage": "https://github.com/your-username/rabbitmq-multinode-connector#readme",
+  "homepage": "https://github.com/SleepySid/multi_node_rabbit_connector#readme",
   "type": "module",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/index.js",
